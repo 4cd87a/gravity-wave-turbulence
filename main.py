@@ -50,12 +50,12 @@ if __name__=='__main__':
     args = parser.parse_args()
     gdebug = args.d
 
-    nx = 128
+    nx = 64
     l = fun(nx, nx)
     L = fun(nx, nx)
     #kx, ky = l.getk()
     rnd = np.random.random(size=nx*nx).reshape((nx,nx))
-    fhat = np.zeros((nx,nx))
+    fhat = np.zeros((nx,nx), dtype=complex)
 
     mask1 = np.zeros((nx,nx))
     ki = l.kx[int(nx/4)]
@@ -63,11 +63,10 @@ if __name__=='__main__':
     for i in range(nx):
         for j in range(nx):
             kmean = np.sqrt(l.kx[i]**2 + l.ky[j]**2)
-
             if ki-kdif < kmean < ki+kdif:
-                fhat[i,j] = .5*10**0*np.exp(1j*2*np.pi*rnd[i,j])
+                fhat[i,j] = 5*10**0*np.exp(1j*2*np.pi*rnd[i,j])
             else:
-                fhat[i,j] = .5*10**-2*np.exp(1j*2*np.pi*rnd[i,j])
+                fhat[i,j] = 5*10**-2*np.exp(1j*2*np.pi*rnd[i,j])
             if ki < kmean:  # j>ki and j<10-ki and i>ki and i<10-ki:
                 mask1[i, j] = 1  # int(np.sqrt(i**2+j**2))
 
@@ -75,8 +74,8 @@ if __name__=='__main__':
     forcage_curve = l.fft  # 5*10**-4
 
     res = []
-    name = "sim_7"
-    description = "change cond init"
+    name = "sim_12"
+    description = "local run"
 
     time = 500 #1200 #*(10**0)
     dt = 10*10**-5
@@ -115,7 +114,7 @@ if __name__=='__main__':
     nua = 0 #.000001
     nub = 0 #.000001
     nug = 0 #.000001
-    nul = 5*10**-7
+    nul = 0 # 5*10**-7
 
     res0 = (0,l.d.copy(),L.d.copy(),0)
     hatmodule0 = hatmodule(res0[1],res0[2],l.dx)
@@ -174,16 +173,16 @@ if __name__=='__main__':
     # res.append((0,l.d.copy(),L.d.copy(),0))
     start = datetime.datetime.now()
 
-    Lold = 0
+    Lold = None
 
     for it in range(starti, nt):
         # 1) l'=L
         lf = ((3./ 2.*L.d - 1./2.*L.do)*dt +l.d)
 
         # 2) dxy(g) = -2(dx l)(dy l)
-        gf = -2 * l.derx() * l.dery()
+        gf = l.derx() * l.dery()
         gf, gfft = calculateDer(gf, g.dimx, g.dx, direc='x', n=-1, retfft=True)
-        gf, gfft = calculateDer(gf, g.dimy, g.dy, direc='y', n=-1, retfft=True, fft=gfft)
+        gf = -2*calculateDer(gf, g.dimy, g.dy, direc='y', n=-1, fft=gfft)
 
         # 3) g'=G + nug*(l,xx+l,yy)
 
@@ -197,9 +196,23 @@ if __name__=='__main__':
                 calculateDer((1 - a.d + b.d + g.d) * l.dery(), g.dimy, l.dy, direc='y', n=1) -
                 (A.d + B.d - G.d) * L.d) * ((1 - (a.d + b.d - g.d)))  # ((a.d+b.d-g.d)**2))**(1)
 
-        if type(Lold) == int and Lold == 0: Lold = Lnew
+        if type(Lold) == type(None): Lold = Lnew
         Lf = (3 * Lnew / 2 - Lold / 2) * dt + L.d + nul * (L.derx(n=2,mask=mask1) + L.dery(n=2,mask=mask1)) * dt
         Lold = Lnew
+
+        # Lf = (3 * ((1 + a.d - b.d + g.d) * l.derx(n=2) + (1 - a.d + b.d + g.d) * l.dery(n=2) +
+        #            (a.derx() - b.derx() + g.derx()) * l.derx() + (-a.dery() + b.dery() + g.dery()) * l.dery()
+        #            - (A.d + B.d - G.d) * L.d) * ((1 - (a.d + b.d - g.d) + ((a.d + b.d - g.d) ** 2)) ** (1)) / 2 -
+        #       ((1 + a.do - b.do + g.do) * calculateDer(l.do, l.dimx, l.dx, direc='x', n=2) +
+        #        (1 - a.do + b.do + g.do) * calculateDer(l.do, l.dimy, l.dy, direc='y', n=2) +
+        #        (calculateDer(a.do, a.dimx, a.dx, direc='x', n=1) -
+        #         calculateDer(b.do, b.dimx, b.dx, direc='x', n=1) +
+        #         calculateDer(g.do, g.dimx, g.dx, direc='x', n=1)) * calculateDer(l.do, l.dimx, l.dx, direc='x', n=1) +
+        #        (-calculateDer(a.do, a.dimy, a.dy, direc='y', n=1) +
+        #         calculateDer(b.do, b.dimy, b.dy, direc='y', n=1) +
+        #         calculateDer(g.do, g.dimy, g.dy, direc='y', n=1)) * calculateDer(l.do, l.dimy, l.dy, direc='y', n=1) -
+        #        (A.do + B.do - G.do) * L.do) * ((1 - (a.do + b.do - g.do) + ((a.do + b.do - g.do) ** 2)) ** (1)) / 2
+        #       ) * dt + L.d + nul * (L.derx(n=2) + L.dery(n=2)) * dt
 
         # rnd = np.random.random(size=nx * nx).reshape((nx, nx))
         # forcage_curve = forcage_curve
